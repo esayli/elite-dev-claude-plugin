@@ -1,0 +1,9 @@
+{
+  "name": "elite-dev",
+  "version": "2.0.0",
+  "description": "Comprehensive feature development workflow with specialized agents for codebase exploration, architecture design, elite implementation, and quality review",
+  "author": {
+    "name": "Eyyup",
+    "email": ""
+  }
+}
