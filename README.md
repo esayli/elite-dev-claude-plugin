@@ -4,15 +4,18 @@ A comprehensive feature development workflow with specialized agents for codebas
 
 ## Overview
 
-This plugin provides a structured 7-phase workflow for building features the right way:
+This plugin provides a structured 8-phase workflow for building features the right way:
 
 1. **Discovery** - Understand what needs to be built
 2. **Codebase Exploration** - Understand existing patterns before designing
-3. **Clarifying Questions** - Resolve all ambiguities upfront
-4. **Architecture Design** - Design thoughtfully before implementing
-5. **Elite Implementation** - Write production-ready code with no placeholders
-6. **Quality Review** - Validate code meets elite standards
-7. **Summary** - Document what was accomplished
+3. **Research** *(Phase 2.5)* - Verify modern best practices via WebSearch and context7 MCP before designing
+4. **Clarifying Questions** - Resolve all ambiguities upfront
+5. **Architecture Design** - Design thoughtfully before implementing
+6. **Elite Implementation** - Write production-ready code with no placeholders
+7. **Quality Review** - Validate code meets elite standards
+8. **Summary** - Document what was accomplished
+
+> Phase 2.5 (Research) is non-skippable without explicit justification. It triggers automatically for fast-evolving frameworks (React, Next.js, etc.), external library/API integration, UI patterns, or any uncertainty about current best practices.
 
 ## Usage
 
@@ -41,9 +44,9 @@ The plugin includes 4 specialized agents that work together:
 | Agent | Purpose | Phase |
 |-------|---------|-------|
 | `code-explorer` | Analyzes existing codebase patterns, traces execution paths | Phase 2 |
-| `code-architect` | Designs feature architecture with concrete blueprints | Phase 4 |
-| `elite-implementer` | Writes production-ready code (no placeholders!) | Phase 5 |
-| `code-reviewer` | Validates code quality with confidence scoring | Phase 6 |
+| `code-architect` | Designs feature architecture with concrete blueprints | Phase 5 |
+| `elite-implementer` | Writes production-ready code (no placeholders!) | Phase 6 |
+| `code-reviewer` | Validates code quality with confidence scoring | Phase 7 |
 
 ### Agent Triggering
 
@@ -51,12 +54,13 @@ All agents have proper `<example>` blocks that show Claude when to spawn them. T
 
 ## Skills
 
-Two skills provide coding standards (auto-loaded by agents):
+Three skills provide coding standards (auto-loaded by agents):
 
 | Skill | Purpose |
 |-------|---------|
 | `elite-standards` | Type safety, error handling, defensive coding, no placeholders |
 | `frontend-excellence` | React/UI best practices, accessibility, performance |
+| `spec-compliance` | Follows wireframes/PRDs exactly — no renamed routes, paths, or components |
 
 ## Elite Implementation Standards
 
@@ -96,14 +100,16 @@ The `code-reviewer` agent uses confidence scoring:
 
 | Feature | Official feature-dev | elite-dev |
 |---------|---------------------|-----------|
-| 7-Phase Workflow | ✅ | ✅ |
+| Phased Workflow | ✅ (7 phases) | ✅ (8 phases) |
 | Exploration Agent | ✅ | ✅ |
+| **Research Phase (WebSearch + context7)** | ❌ | ✅ |
 | Architect Agent | ✅ | ✅ |
 | **Implementer Agent** | ❌ | ✅ |
 | Reviewer Agent | ✅ | ✅ |
-| Auto-loaded Skills | ❌ | ✅ (2 skills) |
+| Auto-loaded Skills | ❌ | ✅ (3 skills) |
 | Strict Type Standards | ❌ | ✅ |
 | No Placeholder Policy | ❌ | ✅ (enforced) |
+| Spec Compliance Enforcement | ❌ | ✅ |
 | Proper Agent Triggering | ✅ | ✅ |
 
 ## File Structure
@@ -122,8 +128,10 @@ elite-dev/
 ├── skills/
 │   ├── elite-standards/
 │   │   └── SKILL.md          # Core coding standards
-│   └── frontend-excellence/
-│       └── SKILL.md          # Frontend standards
+│   ├── frontend-excellence/
+│   │   └── SKILL.md          # Frontend standards
+│   └── spec-compliance/
+│       └── SKILL.md          # Wireframe/PRD adherence
 └── README.md
 ```
 
