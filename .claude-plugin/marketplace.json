@@ -1,0 +1,23 @@
+{
+  "name": "elite-dev-marketplace",
+  "owner": {
+    "name": "Eyyup Sayli"
+  },
+  "metadata": {
+    "description": "Single-plugin marketplace for the elite-dev feature development workflow",
+    "version": "2.0.0"
+  },
+  "plugins": [
+    {
+      "name": "elite-dev",
+      "source": ".",
+      "description": "Comprehensive feature development workflow with specialized agents for codebase exploration, architecture design, elite implementation, and quality review",
+      "version": "2.0.0",
+      "category": "development",
+      "tags": ["feature-dev", "agents", "skills", "workflow", "code-quality"],
+      "author": {
+        "name": "Eyyup Sayli"
+      }
+    }
+  ]
+}
