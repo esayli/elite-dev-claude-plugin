@@ -45,8 +45,12 @@ This command spawns a Claude Code **agent team** rather than one-shot subagents.
 
 **Cross-talk rules** (the actual mechanic, no longer orchestrator-mediated):
 - Teammates use `SendMessage({to: "<teammate-name>", message: "..."})` to talk directly. The recipient gets it as a new turn automatically.
-- Reviewers in Phase 6 are explicitly told to `SendMessage` implementer teammates before flagging a decision as a bug.
-- Architects may `SendMessage` explorers; implementers may `SendMessage` architects/explorers; reviewers may `SendMessage` implementers/architects.
+- **General permission: any teammate may `SendMessage` any other live teammate** when their judgment says there's a genuine information need. No phase- or role-based gating. The heuristic (below) is the only gate — don't ask reflexively, ask when your output would change based on the answer.
+- Common cross-talk patterns from past runs (not exclusive — guidance, not rules):
+  - Architect → explorer: clarify codebase findings before finalizing a design
+  - Implementer → architect: clarify design intent; → explorer: codebase patterns and conventions
+  - Reviewer → implementer: challenge specific decisions before flagging as bugs; → architect: confirm canonical design when implementation diverged; → explorer: reuse codebase knowledge for review context (avoids fresh-spawn cost)
+  - Same-phase peers (e.g. two implementers sharing files) may coordinate via SendMessage if division of labor needs sorting out
 - **Always refer to teammates by name**, never by agentId.
 - A teammate going idle after sending a message is normal — idle just means waiting for input. Do NOT spawn replacements.
 
@@ -119,7 +123,7 @@ Initial request: $ARGUMENTS
    Each explorer's prompt should:
    - Trace through the code comprehensively, focused on one aspect (similar features, architecture, existing implementation, etc.)
    - Return a list of 5-10 key files to read
-   - Tell them: "You are a teammate in team `feature-team-<slug>`. Your peers will be architects (Phase 4), implementers (Phase 5), and reviewers (Phase 6). They may `SendMessage` you for follow-up questions. Stay available."
+   - Tell them: "You are a teammate in team `feature-team-<slug>`. Other explorers may exist in your phase; later phases will spawn architects, implementers, and reviewers. **Any live teammate may `SendMessage` any other when their judgment says there's a genuine information need** — that includes you initiating peer DMs. If your exploration uncovers something that affects another explorer's focus, `SendMessage` them. Stay available; later phases may also `SendMessage` you for follow-up questions about what you found."
    - **Include the Output delivery rule verbatim** (see Agent Team Mode section): "When your work for this turn is complete, you MUST `SendMessage({to: 'team-lead', message: '<your full report>'})`. Your plain in-context output is NOT visible to the lead — going idle without sending means your work is lost." Without this, explorers often go idle without delivering and need an orchestrator nudge.
 
    **Example prompts** (each spawned with the corresponding name):
@@ -185,8 +189,8 @@ If the user says "whatever you think is best", provide your recommendation and g
 
    Each architect's prompt MUST include:
    - The feature description and findings from Phase 2/2.5/3
-   - "Your teammates include explorers: `explorer-similar`, `explorer-architecture`, `explorer-existing` (use the names that exist). You may `SendMessage` any of them directly with follow-up questions about what they found in the codebase before finalizing your design proposal."
-   - **Cross-talk heuristic verbatim**: "If your work hinges on details NOT enumerated in this brief — exact counts, full call-site lists, behavior of adjacent systems beyond the headline findings, low-level call sites — `SendMessage` the relevant explorer before finalizing. The brief is summary-level; explorers hold the full detail. Don't ask reflexively — ask when your output would change based on the answer."
+   - "Your live teammates: explorers (`explorer-similar`, `explorer-architecture`, `explorer-existing` — use the names that exist) and your fellow architects. **You may SendMessage any of them when your judgment says it'll change your output.** Most useful for an architect: explorers for codebase-detail clarification before finalizing your design; fellow architects only if you spot a conflicting assumption worth resolving."
+   - **Cross-talk heuristic verbatim**: "If your work hinges on details NOT enumerated in this brief — exact counts, full call-site lists, behavior of adjacent systems beyond the headline findings, low-level call sites — `SendMessage` the relevant peer before finalizing. The brief is summary-level; peers hold the full detail. Don't ask reflexively — ask when your output would change based on the answer."
    - **Output delivery rule verbatim**: "When your proposal is complete, you MUST `SendMessage({to: 'team-lead', message: '<your full proposal>'})`. Your plain in-context output is NOT visible to the lead — going idle without sending means your work is lost."
    - "Refer to teammates by name only. Going idle after sending is normal."
 
@@ -211,7 +215,7 @@ If the user says "whatever you think is best", provide your recommendation and g
 
    Each implementer's prompt MUST include:
    - The component's scope and the chosen architect's design (paste the design directly so it doesn't need to ask)
-   - "Your teammates include the architect `architect-<chosen>` and explorers `explorer-*`. You may `SendMessage` any of them directly if you need clarification on the design or codebase before writing code."
+   - "Your live teammates: the chosen architect (`architect-<chosen>`), explorers (`explorer-*`), and any fellow implementers spawned for other components. **You may SendMessage any of them when your judgment says it'll change your code.** Most useful for an implementer: architect for design intent; explorers for codebase patterns and conventions; fellow implementers if you're sharing files, types, or interfaces."
    - **Cross-talk heuristic verbatim**: "If your implementation hinges on details NOT in this brief — exact codebase patterns, conventions in adjacent modules, why a design choice was made — `SendMessage` the relevant peer (architect for design intent, explorer for codebase patterns) before writing code. Don't ask reflexively — ask when your code would change based on the answer."
    - **Output delivery rule verbatim**: "After your implementation is complete, you MUST `SendMessage({to: 'team-lead', message: '<summary of files changed + key decisions>'})`. Your plain in-context output is NOT visible to the lead — going idle without sending leaves the lead unaware that you're done."
    - "You will stay alive after delivering this turn's code. Phase 6 reviewers may `SendMessage` you to ask why you made specific decisions before flagging them as bugs. Be ready to defend your choices or revise."
@@ -235,9 +239,11 @@ If the user says "whatever you think is best", provide your recommendation and g
    - `reviewer-conventions` — project conventions, abstractions
 
    Each reviewer's prompt MUST include:
-   - The list of all live implementer teammate names (e.g. "Implementers in this team: `implementer-auth`, `implementer-api`")
-   - **Cross-talk heuristic verbatim** (stronger for reviewers — this is where peer DM is most valuable): "Before flagging a decision as a bug or anti-pattern, `SendMessage` the relevant implementer teammate to ask why they made that choice. Treat their answer as input, not gospel — if their justification is weak, still flag it. If it's sound, drop the finding or reframe it. Always refer to teammates by name."
-   - "You may also `SendMessage` `architect-<chosen>` to confirm design intent."
+   - The list of ALL live teammates by role (e.g. "Implementers: `implementer-auth`, `implementer-api`. Architects: `architect-clean`. Explorers: `explorer-architecture`, `explorer-existing`, `explorer-similar`. Fellow reviewers: `reviewer-bugs`, `reviewer-conventions`."). **All of them are SendMessage-able.**
+   - **Cross-talk heuristic verbatim** (stronger for reviewers — peer DM is most valuable here): "Before flagging a decision as a bug or anti-pattern, `SendMessage` the relevant implementer teammate to ask why they made that choice. Treat their answer as input, not gospel — if their justification is weak, still flag it. If it's sound, drop the finding or reframe it. Always refer to teammates by name."
+   - **Reuse explorer knowledge instead of re-discovering it**: "When you need codebase context for a review (`what's the convention for X here?`, `is this pattern used elsewhere?`, `what does the existing module already do?`), `SendMessage` the relevant `explorer-*` rather than re-reading large amounts of code yourself. Explorers already have the file map in their context. This is the cheap alternative to spawning fresh reviewers — same knowledge reuse without role-swap or context bloat."
+   - **Confirm design intent**: "If you suspect implementation diverged from the design and want to know which is canonical, `SendMessage` `architect-<chosen>`."
+   - **General permission**: "Any other live teammate (including fellow reviewers) is also SendMessage-able if your judgment finds a need."
    - **Output delivery rule verbatim**: "When your review is complete, you MUST `SendMessage({to: 'team-lead', message: '<consolidated findings>'})`. Your plain in-context output is NOT visible to the lead — going idle without sending leaves your findings lost."
    - The list of files to review (output paths from Phase 5).
 
