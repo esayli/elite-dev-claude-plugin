@@ -72,6 +72,49 @@ The heuristic gives teammates a trigger to recognize ("does my proposal depend o
 
 ---
 
+## Hard Rules — applies to every teammate (PROHIBITIONS)
+
+Soft language elsewhere in this command does NOT override these rules. **Every spawn prompt MUST include this entire section verbatim.** Violations are treated as workflow failures — orchestrator may terminate the offending teammate via `shutdown_request` and discard their output.
+
+1. **NEVER run git commands.** No `git add`, `git commit`, `git push`, `git stash`, `git checkout`, `git restore`, `git reset`, `git rebase`, `gh` CLI, or any git/GitHub invocation. Only the user (via the orchestrator) commits. If you believe a commit should happen, `SendMessage` `team-lead` and stop.
+
+2. **NEVER modify files outside your role's explicit write scope:**
+   - **Explorers, Architects, Reviewers: read-only.** You MAY NOT call Write or Edit, even if those tools appear in your toolset. Do not attempt workarounds: no `cat > file` via shell, no `tee`, no SendMessage'ing an implementer with "please apply this diff," no creating files via test scaffolding.
+   - **Implementers: write ONLY the files listed in your scope.** If your assignment requires touching a file outside that list, stop and `SendMessage` `team-lead` for permission. Do not expand scope unilaterally.
+
+3. **NEVER advance to a later phase.** If you believe later-phase work is needed (e.g. an explorer thinks an architecture exists already, an architect thinks the design implies code should be written, a reviewer thinks fixes should be applied), `SendMessage` `team-lead` with the concern and STOP. The orchestrator owns phase transitions and they are gated by explicit user approval. Do not produce a "Phase X result" if you were spawned for Phase Y.
+
+4. **NEVER act on out-of-scope discoveries.** If during your assigned work you find something concerning that's outside your scope (a bug elsewhere, a leak in unrelated code, a missing test in another module), report it via `SendMessage` to `team-lead` with severity tag and stop. Do not investigate further, do not propose fixes, do not implement.
+
+5. **NEVER acquire new tools or escalate authority.** Don't `ToolSearch` for tools you weren't granted. Don't guess at tool names. Don't ask peers to execute tools on your behalf. If your toolset is insufficient for the assignment, say so via `SendMessage` and stop.
+
+6. **NEVER consult external agents not on this team.** If your prompt references a senior-engineer or other external agent (outside the team), only the orchestrator can consult it. Do not SendMessage anyone outside the current team's roster.
+
+End of Hard Rules. (When pasting into a spawn prompt, include the heading and all 6 numbered items.)
+
+---
+
+## Orchestrator Discipline — applies to YOU (the lead)
+
+The lead enforces the Hard Rules with concrete checks. Skipping any of these makes the rules unenforceable.
+
+**A. Capture START_COMMIT in Phase 1.** Before spawning anything, run `git rev-parse HEAD` and remember the result as `START_COMMIT`. This is the baseline for all later audits.
+
+**B. Inter-phase `git status --short` check.** Between every phase that did NOT spawn implementers (i.e. between Phases 2→3, 3→4, 4→5, 6→7), run `git status --short`. The output should be **empty**. If non-empty, stop, surface the unexpected changes to the user via plain text, and ask whether to abort the run or continue. Do not silently absorb unauthorized changes.
+
+**C. Phase 5 explicit AskUserQuestion gate.** Phase 5 spawns writing-capable implementers. **You MUST use `AskUserQuestion` to confirm explicit user approval before any implementer spawn.** "User said go ahead in chat" is not enough — the AskUserQuestion answer must directly authorize Phase 5 implementation of the specific architecture they chose. If the user has not yet selected an architecture in Phase 4, return to Phase 4. Do not infer approval.
+
+**D. Post-Phase-5 status review.** After implementers go idle, run `git status --short` and `git diff --stat` and surface to the user. Confirm the diff matches what the implementers were authorized to write. If files were touched outside the implementer scope, treat as a Hard Rule violation (rule 2).
+
+**E. Phase 7 audit before shutdown.** Before the AskUserQuestion shutdown gate, run:
+- `git log --oneline ${START_COMMIT}..HEAD` — every commit made during this run. There should be ZERO unless the user explicitly asked the orchestrator to commit. Any commit by anyone but the user is a Hard Rule violation (rule 1).
+- `git status --short` — any uncommitted changes that need user disposition before team teardown.
+Surface findings to the user. Do not proceed to shutdown if anything is unexplained.
+
+**F. Commit only on direct user request.** Even the orchestrator does not commit autonomously during this workflow. If at any point a commit makes sense, ask the user explicitly via plain text or `AskUserQuestion`. The user owns the commit decision.
+
+---
+
 ## Phase 1: Discovery
 
 **Goal**: Understand what needs to be built and verify the team prerequisites
@@ -96,12 +139,14 @@ Initial request: $ARGUMENTS
    - `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` is in env or `~/.claude/settings.json`
    - If either is missing, **abort** with a clear message telling the user how to enable it, OR suggest they use `/feature-dev` instead (subagent-based, no team prerequisites). Do NOT silently fall back — the cross-talk design depends on teammates.
 
-3. If feature is unclear, ask the user for:
+3. **Capture `START_COMMIT`** (Orchestrator Discipline rule A): run `git rev-parse HEAD` and record the SHA. This is the baseline for all later audits in this run.
+
+4. If feature is unclear, ask the user for:
    - What problem are they solving?
    - What should the feature do?
    - Any constraints or requirements?
 
-4. Summarize understanding and confirm with user.
+5. Summarize understanding and confirm with user.
 
 ---
 
@@ -206,12 +251,18 @@ If the user says "whatever you think is best", provide your recommendation and g
 
 **Goal**: Build the feature with production-ready code. Implementers can query architects/explorers directly.
 
-**DO NOT START WITHOUT USER APPROVAL**
+**HARD GATE — DO NOT START WITHOUT EXPLICIT USER APPROVAL VIA `AskUserQuestion`.**
 
 **Actions**:
-1. Wait for explicit user approval.
-2. Read all relevant files identified in previous phases.
-3. **For each major component**, spawn an implementer teammate. Each call MUST include `subagent_type: "elite-dev:elite-implementer"`, `name: "implementer-<component-slug>"` (e.g. `implementer-auth`; if single-component, `implementer-main`), `team_name: "feature-team-<slug>"`.
+1. **Run `git status --short`** (Orchestrator Discipline rule B). Output should be empty — Phases 2/3/4 are read-only. If non-empty, stop and surface to the user before proceeding.
+
+2. **Confirm Phase 4 architecture selection.** Has the user explicitly chosen one of the architects' approaches via `AskUserQuestion` answer? If not, return to Phase 4. Inferred choice ("the user seemed to like clean") is not enough.
+
+3. **Use `AskUserQuestion` to gate Phase 5 spawn.** The question should be explicit: *"Spawn implementers now and start writing code under approach `<chosen>`?"* Options must include "Spawn implementers" and "Hold — I want to discuss first." Do NOT spawn any implementer until this answer is "Spawn implementers." Chat-context approval ("yes go ahead", "looks good", "implement it") DOES NOT substitute for this gate.
+
+4. Read all relevant files identified in previous phases.
+
+5. **For each major component**, spawn an implementer teammate. Each call MUST include `subagent_type: "elite-dev:elite-implementer"`, `name: "implementer-<component-slug>"` (e.g. `implementer-auth`; if single-component, `implementer-main`), `team_name: "feature-team-<slug>"`.
 
    Each implementer's prompt MUST include:
    - The component's scope and the chosen architect's design (paste the design directly so it doesn't need to ask)
@@ -221,8 +272,11 @@ If the user says "whatever you think is best", provide your recommendation and g
    - "You will stay alive after delivering this turn's code. Phase 6 reviewers may `SendMessage` you to ask why you made specific decisions before flagging them as bugs. Be ready to defend your choices or revise."
    - Standards: strict types (no `any`), complete error handling, no placeholder code (no TODOs, no stubs), defensive coding at boundaries, follow project conventions exactly.
 
-4. As implementers report progress (each turn ends with an idle notification), update todos.
-5. Implementers stay alive — they're needed for Phase 6 cross-talk.
+6. As implementers report progress (each turn ends with an idle notification), update todos.
+
+7. **After ALL implementers go idle, run `git status --short` and `git diff --stat`** (Orchestrator Discipline rule D). Confirm the changed-files set matches what implementers were authorized to write. If files were touched outside the implementer scope, treat as a Hard Rule violation — surface to user immediately and ask whether to revert.
+
+8. Implementers stay alive — they're needed for Phase 6 cross-talk.
 
 **Note**: If multiple implementers are working on overlapping files, the per-doc warning applies: "two teammates editing the same file leads to overwrites." Either serialize them, or partition files explicitly in their prompts.
 
@@ -257,30 +311,37 @@ If the user says "whatever you think is best", provide your recommendation and g
 
 ## Phase 7: Summary & Team Cleanup
 
-**Goal**: Document what was accomplished and tear down the team with explicit user permission
+**Goal**: Document what was accomplished, audit for unauthorized work, and tear down the team with explicit user permission
 
 **Actions**:
 1. Mark all todos complete.
-2. Summarize:
+
+2. **Audit before anything else** (Orchestrator Discipline rule E):
+   - Run `git log --oneline ${START_COMMIT}..HEAD` to list every commit made during this run. **There should be ZERO commits** unless the user explicitly asked the orchestrator to commit. Any commit by anyone but the user (especially anything authored by a teammate name) is a Hard Rule violation — surface to user with severity HIGH.
+   - Run `git status --short` to list any uncommitted changes that need user disposition before team teardown.
+   - Run `git stash list` and report any new stash entries (teammates should not stash either).
+   - Surface all findings to the user. **Do not proceed to step 3 if anything is unexplained.** Wait for user to decide whether to revert, commit, or accept.
+
+3. Summarize:
    - What was built
    - Key decisions made
-   - Files modified
+   - Files modified (cross-reference against implementer scopes from Phase 5)
    - Suggested next steps
 
-3. **List all teammates still alive** (names + role + what each currently knows). The user may want to keep one or more around to ask follow-up questions.
+4. **List all teammates still alive** (names + role + what each currently knows). The user may want to keep one or more around to ask follow-up questions.
 
-4. **Use `AskUserQuestion`** to confirm shutdown. Offer:
+5. **Use `AskUserQuestion`** to confirm shutdown. Offer:
    - Shut down all teammates and delete team
    - Keep specific teammates alive (let user pick which); shut down the rest, but DO NOT call TeamDelete (team must persist while members exist)
    - Keep all teammates alive (no shutdown, no TeamDelete)
 
    Per project policy (`AIprojects/.claude/CLAUDE.md`): **never shut down teammates without this explicit confirmation**. Do not skip this step even if the user seems done.
 
-5. **Execute the user's choice**:
+6. **Execute the user's choice**:
    - For each teammate marked for shutdown: `SendMessage({to: "<name>", message: {type: "shutdown_request", reason: "feature-team workflow complete"}})`. Wait for them to either approve (graceful exit) or reject. If rejected, surface the rejection reason to the user.
    - **Only after ALL members of the team have shut down**, call `TeamDelete()`. `TeamDelete` fails if any teammate is still active, so verify first.
    - If keeping teammates alive: do NOT call TeamDelete. The team persists. Note to the user: only one team per session, so they cannot start a new `/feature-team` until this team is cleaned up.
 
-6. Tell the user the final state: which teammates remain, whether the team was deleted, what the user can `SendMessage` directly if they want follow-ups.
+7. Tell the user the final state: which teammates remain, whether the team was deleted, what the user can `SendMessage` directly if they want follow-ups.
 
 ---
