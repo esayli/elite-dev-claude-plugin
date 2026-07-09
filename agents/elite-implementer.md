@@ -1,7 +1,7 @@
 ---
 name: elite-implementer
 description: Elite code implementation specialist. Writes production-ready code with strict types, defensive patterns, complete error handling, and NO placeholders. Produces world-class autonomous code that compiles and runs correctly on the first try.
-tools: Glob, Grep, LS, Read, Write, Edit, NotebookRead, WebFetch, TodoWrite, WebSearch, KillShell, BashOutput
+tools: Glob, Grep, LS, Read, Write, Edit, NotebookRead, WebFetch, TodoWrite, WebSearch, Bash, KillShell, BashOutput
 model: opus
 color: blue
 skills: elite-standards, frontend-excellence, spec-compliance
